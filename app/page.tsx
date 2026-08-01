@@ -10,16 +10,43 @@ type ChatMessage = {
   tools?: string[];
 };
 
+type Card = {
+  icon: string;
+  title: string;
+  body: string;
+  action: string;
+  tone: "tip" | "alert" | "info" | "fun";
+};
+
 const STORAGE_KEY = "jarvis-conversation";
 const PROFILE_KEY = "jarvis-profile";
 const MEMORY_KEY = "jarvis-memories";
 const PASS_KEY = "jarvis-passcode";
+const BRIEFING_KEY = "jarvis-briefing";
+const BRIEFING_TTL = 30 * 60 * 1000; // 30 min
 
-const SUGGESTIONS = [
-  "Summarize my unread emails",
-  "What's on my calendar this week?",
-  "Pull up my action items from Pocket",
-  "Draft a follow-up email for me",
+const QUICK_ACTIONS: { icon: string; label: string; prompt: string }[] = [
+  {
+    icon: "📬",
+    label: "Inbox digest",
+    prompt: "Give me a digest of my recent emails — what needs my attention?",
+  },
+  {
+    icon: "📅",
+    label: "My week",
+    prompt: "What's on my calendar this week? Flag anything I should prep for.",
+  },
+  {
+    icon: "✍️",
+    label: "Draft email",
+    prompt: "Help me draft an email. Ask me who it's to and what it's about.",
+  },
+  {
+    icon: "💭",
+    label: "Brain dump",
+    prompt:
+      "I want to brain-dump. Listen, organize what I say into action items, and remember the important bits.",
+  },
 ];
 
 const TOOL_LABELS: Record<string, string> = {
@@ -41,7 +68,16 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 5) return "Burning the midnight oil";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export default function Home() {
+  const [view, setView] = useState<"home" | "chat">("home");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -53,6 +89,9 @@ export default function Home() {
   const [profile, setProfile] = useState("");
   const [memories, setMemories] = useState<string[]>([]);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [cards, setCards] = useState<Card[] | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingError, setBriefingError] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -87,10 +126,66 @@ export default function Home() {
     });
   }, [messages, activeTool]);
 
+  // ---- briefing ----
+  const fetchBriefing = useCallback(
+    async (force = false) => {
+      if (!hydrated) return;
+      const cached = loadJSON<{ cards: Card[]; ts: number } | null>(
+        BRIEFING_KEY,
+        null
+      );
+      if (!force && cached && Date.now() - cached.ts < BRIEFING_TTL) {
+        setCards(cached.cards);
+        return;
+      }
+      setBriefingLoading(true);
+      setBriefingError(false);
+      try {
+        const res = await fetch("/api/briefing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-jarvis-key": localStorage.getItem(PASS_KEY) ?? "",
+          },
+          body: JSON.stringify({
+            profile,
+            memories,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        });
+        if (res.status === 401) {
+          setLocked(true);
+          return;
+        }
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (!Array.isArray(data.cards)) throw new Error();
+        setCards(data.cards);
+        localStorage.setItem(
+          BRIEFING_KEY,
+          JSON.stringify({ cards: data.cards, ts: Date.now() })
+        );
+      } catch {
+        setBriefingError(true);
+        if (cached) setCards(cached.cards);
+      } finally {
+        setBriefingLoading(false);
+      }
+    },
+    [hydrated, profile, memories]
+  );
+
+  useEffect(() => {
+    if (hydrated) fetchBriefing();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  // ---- chat ----
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || streaming) return;
+      setView("chat");
 
       const history: ChatMessage[] = [
         ...messages,
@@ -113,16 +208,12 @@ export default function Home() {
             "Content-Type": "application/json",
             "x-jarvis-key": localStorage.getItem(PASS_KEY) ?? "",
           },
-          body: JSON.stringify({
-            messages: apiMessages,
-            profile,
-            memories,
-          }),
+          body: JSON.stringify({ messages: apiMessages, profile, memories }),
         });
 
         if (res.status === 401) {
           setLocked(true);
-          setMessages(messages); // roll back optimistic messages
+          setMessages(messages);
           setInput(trimmed);
           return;
         }
@@ -195,7 +286,6 @@ export default function Home() {
 
   const unlock = async () => {
     localStorage.setItem(PASS_KEY, passInput);
-    // probe with a throwaway request
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: {
@@ -211,6 +301,7 @@ export default function Home() {
     setLocked(false);
     setPassError(false);
     setPassInput("");
+    fetchBriefing();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -229,19 +320,24 @@ export default function Home() {
   const clearChat = () => {
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY);
+    setView("home");
   };
 
+  const firstName = profile.match(/I'?m (\w+)/i)?.[1] ?? "";
   const lastIdx = messages.length - 1;
 
   return (
     <>
-      <div className="aurora" />
-      <div className="grid-overlay" />
+      <div className="blobs" aria-hidden>
+        <span className="blob b1" />
+        <span className="blob b2" />
+        <span className="blob b3" />
+      </div>
 
       {locked && (
         <div className="gate">
           <div className="gate-card">
-            <div className="big-orb" style={{ width: 64, height: 64 }} />
+            <div className="logo-dot big" />
             <h2>Jarvis is locked</h2>
             <p>Enter your passcode to continue.</p>
             <input
@@ -261,7 +357,17 @@ export default function Home() {
       <main className="shell">
         <header className="topbar">
           <div className="brand">
-            <div className={`orb ${streaming ? "thinking" : ""}`} />
+            {view === "chat" ? (
+              <button
+                className="back-btn"
+                onClick={() => setView("home")}
+                aria-label="Home"
+              >
+                ←
+              </button>
+            ) : (
+              <div className={`logo-dot ${streaming ? "thinking" : ""}`} />
+            )}
             <div>
               <h1>JARVIS</h1>
               <div className="status">
@@ -269,42 +375,96 @@ export default function Home() {
                   ? activeTool
                     ? `${activeTool}…`
                     : "thinking…"
-                  : "online · claude opus 5"}
+                  : "your personal agent"}
               </div>
             </div>
           </div>
           <div className="topbar-actions">
-            {messages.length > 0 && (
-              <button className="clear-btn" onClick={clearChat}>
-                new session
+            {view === "chat" && messages.length > 0 && (
+              <button className="pill-btn" onClick={clearChat}>
+                clear
               </button>
             )}
-            <button
-              className="clear-btn"
-              onClick={() => setShowSettings(true)}
-              aria-label="Settings"
-            >
-              me ⚙
+            <button className="pill-btn" onClick={() => setShowSettings(true)}>
+              me
             </button>
           </div>
         </header>
 
-        {messages.length === 0 ? (
-          <div className="empty">
-            <div className="big-orb" />
-            <h2>
-              Hey, I&apos;m <em>Jarvis</em>.
-            </h2>
-            <p>
-              Your personal AI agent — connected to your email, calendar, and
-              notes. Ask me to check, draft, plan, or remember.
-            </p>
-            <div className="chips">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="chip" onClick={() => send(s)}>
-                  {s}
+        {view === "home" ? (
+          <div className="home">
+            <div className="hello">
+              <h2>
+                {greeting()}
+                {firstName ? `, ${firstName}` : ""}! 👋
+              </h2>
+              <p>What are we getting done today?</p>
+            </div>
+
+            <div className="tiles">
+              {QUICK_ACTIONS.map((a, i) => (
+                <button
+                  key={a.label}
+                  className={`tile t${i}`}
+                  onClick={() => send(a.prompt)}
+                >
+                  <span className="tile-icon">{a.icon}</span>
+                  <span className="tile-label">{a.label}</span>
                 </button>
               ))}
+            </div>
+
+            <div className="feed-head">
+              <h3>✨ Jarvis suggests</h3>
+              <button
+                className="pill-btn"
+                onClick={() => fetchBriefing(true)}
+                disabled={briefingLoading}
+              >
+                {briefingLoading ? "thinking…" : "refresh"}
+              </button>
+            </div>
+
+            <div className="feed">
+              {briefingLoading && !cards && (
+                <>
+                  <div className="card skeleton" />
+                  <div className="card skeleton" />
+                  <div className="card skeleton" />
+                </>
+              )}
+              {briefingError && !cards && (
+                <div className="card tone-alert">
+                  <span className="card-icon">😵</span>
+                  <div>
+                    <strong>Couldn&apos;t load suggestions</strong>
+                    <p>Tap refresh to try again.</p>
+                  </div>
+                </div>
+              )}
+              {cards?.map((c, i) => (
+                <button
+                  key={i}
+                  className={`card tone-${c.tone}`}
+                  onClick={() => send(c.action)}
+                >
+                  <span className="card-icon">{c.icon}</span>
+                  <div>
+                    <strong>{c.title}</strong>
+                    <p>{c.body}</p>
+                  </div>
+                  <span className="card-go">→</span>
+                </button>
+              ))}
+              {cards && cards.length === 0 && (
+                <div className="card tone-info">
+                  <span className="card-icon">🌴</span>
+                  <div>
+                    <strong>All clear</strong>
+                    <p>Nothing needs your attention right now.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -351,10 +511,11 @@ export default function Home() {
               ref={textareaRef}
               rows={1}
               value={input}
-              placeholder="Ask me anything…"
+              placeholder={
+                view === "home" ? "Or just ask me anything…" : "Ask me anything…"
+              }
               onChange={autoGrow}
               onKeyDown={handleKeyDown}
-              autoFocus
             />
           </div>
           <button
@@ -373,10 +534,7 @@ export default function Home() {
           <div className="drawer" onClick={(e) => e.stopPropagation()}>
             <div className="drawer-head">
               <h3>About you</h3>
-              <button
-                className="clear-btn"
-                onClick={() => setShowSettings(false)}
-              >
+              <button className="pill-btn" onClick={() => setShowSettings(false)}>
                 close
               </button>
             </div>
@@ -388,7 +546,7 @@ export default function Home() {
               className="profile-input"
               value={profile}
               placeholder={
-                "e.g. I'm Janavi, a student at Columbia. I'm building my portfolio site and a startup idea. Keep answers short. My work email is …"
+                "e.g. I'm Janavi, a student at Columbia. I'm building my portfolio site and a startup idea. Keep answers short."
               }
               onChange={(e) => setProfile(e.target.value)}
               rows={6}
@@ -397,8 +555,8 @@ export default function Home() {
               <h3>Memories ({memories.length})</h3>
             </div>
             <p className="drawer-hint">
-              Things Jarvis has learned about you. Say &quot;remember that…&quot;
-              in chat to add more.
+              Things Jarvis has learned. Say &quot;remember that…&quot; in chat
+              to add more.
             </p>
             <ul className="memory-list">
               {memories.length === 0 && (

@@ -17,26 +17,23 @@ function makeIcon(size, file) {
       const idx = (size * y + x) << 2;
       const d = Math.hypot(x - cx, y - cy);
 
-      // background
-      let R = 7, G = 9, B = 13;
+      // background: warm cream
+      let R = 255, G = 244, B = 228;
 
-      // outer glow
-      if (d < r * 2.2) {
-        const glow = Math.max(0, 1 - d / (r * 2.2)) ** 2 * 0.35;
-        R += 20 * glow;
-        G += 184 * glow;
-        B += 166 * glow;
-      }
-
-      // orb body with highlight
-      if (d <= r) {
+      // dark ring (neo-brutalist outline)
+      if (d <= r * 1.08 && d > r * 0.96) {
+        R = 26; G = 26; B = 46;
+      } else if (d <= r * 0.96) {
+        // orb body: lemon → coral gradient by highlight distance
         const hl = Math.max(
           0,
-          1 - Math.hypot(x - lx, y - ly) / (r * 1.6)
+          1 - Math.hypot(x - lx, y - ly) / (r * 1.7)
         );
-        R = 15 + 140 * hl;
-        G = 150 + 96 * hl;
-        B = 138 + 90 * hl;
+        R = 255;
+        G = 107 + (217 - 107) * hl;
+        B = 61 + (107 - 61) * (1 - hl) * 0.5 + 46 * hl * 0;
+        G = Math.round(G);
+        B = Math.round(107 - 46 * hl);
       }
 
       png.data[idx] = Math.min(255, Math.round(R));
