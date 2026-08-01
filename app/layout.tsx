@@ -14,7 +14,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aether — Your Personal AI Agent",
+  title: "Jarvis — Your Personal AI Agent",
   description:
     "A personal AI agent powered by Claude. Plan, write, code, and think — together.",
 };

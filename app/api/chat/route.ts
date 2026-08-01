@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You are Aether, a personal AI agent — sharp, warm, and genuinely useful.
+const SYSTEM_PROMPT = `You are Jarvis, a personal AI agent — sharp, warm, and genuinely useful.
 
 Personality:
 - You are the user's trusted right hand: proactive, direct, and resourceful.

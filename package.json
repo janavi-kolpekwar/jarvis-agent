@@ -1,8 +1,8 @@
 {
-  "name": "aether-agent",
+  "name": "jarvis-agent",
   "version": "1.0.0",
   "private": true,
-  "description": "Aether — your personal AI agent. Full-stack Next.js app powered by Claude.",
+  "description": "Jarvis — your personal AI agent. Full-stack Next.js app powered by Claude.",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",

@@ -9,7 +9,7 @@ type ChatMessage = {
   content: string;
 };
 
-const STORAGE_KEY = "aether-conversation";
+const STORAGE_KEY = "jarvis-conversation";
 
 const SUGGESTIONS = [
   "Plan my week around three big goals",
@@ -138,7 +138,7 @@ export default function Home() {
           <div className="brand">
             <div className={`orb ${streaming ? "thinking" : ""}`} />
             <div>
-              <h1>AETHER</h1>
+              <h1>JARVIS</h1>
               <div className="status">
                 {streaming ? "thinking…" : "online · claude opus 5"}
               </div>
@@ -155,7 +155,7 @@ export default function Home() {
           <div className="empty">
             <div className="big-orb" />
             <h2>
-              Hey, I&apos;m <em>Aether</em>.
+              Hey, I&apos;m <em>Jarvis</em>.
             </h2>
             <p>
               Your personal AI agent — here to plan, write, code, and think
@@ -174,7 +174,7 @@ export default function Home() {
             {messages.map((m, i) => (
               <div key={i} className={`msg ${m.role}`}>
                 <span className="who">
-                  {m.role === "user" ? "you" : "aether"}
+                  {m.role === "user" ? "you" : "jarvis"}
                 </span>
                 <div className="bubble">
                   {m.role === "assistant" ? (

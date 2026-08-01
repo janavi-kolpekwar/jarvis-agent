@@ -1,4 +1,4 @@
-# ✦ Aether — Your Personal AI Agent
+# ✦ Jarvis — Your Personal AI Agent
 
 A full-stack personal AI assistant with a streaming chat interface, powered by **Claude Opus 5** and built with **Next.js 15**.
 
@@ -50,7 +50,7 @@ Then edit `.env.local` and paste your Anthropic API key (get one at [platform.cl
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and say hi to Aether.
+Open [http://localhost:3000](http://localhost:3000) and say hi to Jarvis.
 
 ## Deploy to Vercel
 
@@ -71,7 +71,7 @@ vercel --prod
 ## Project Structure
 
 ```
-aether-agent/
+jarvis-agent/
 ├── app/
 │   ├── api/chat/route.ts   # Backend: streaming Claude endpoint
 │   ├── page.tsx            # Frontend: chat UI (client component)
