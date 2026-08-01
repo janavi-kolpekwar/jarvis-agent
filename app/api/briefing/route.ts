@@ -152,7 +152,7 @@ ${memories.length ? `\n## Memories\n${memories.map((m) => `- ${m}`).join("\n")}`
       }
 
       const text = response.content.find(
-        (b): b is Anthropic.TextBlock => b.type === "text"
+        (b: any) => b.type === "text"
       )?.text;
       if (!text) break;
       const parsed = JSON.parse(text);
