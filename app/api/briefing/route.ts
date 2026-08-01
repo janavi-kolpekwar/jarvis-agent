@@ -67,9 +67,23 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic();
   const tools = buildTools();
 
+  const pocketUrl = process.env.POCKET_MCP_URL;
+  const pocketToken = process.env.POCKET_MCP_TOKEN;
+  const mcpServers = pocketUrl
+    ? [
+        {
+          type: "url" as const,
+          url: pocketUrl,
+          name: "pocket",
+          ...(pocketToken ? { authorization_token: pocketToken } : {}),
+        },
+      ]
+    : undefined;
+
   const system = `You are Jarvis, the user's personal AI agent, generating their dashboard briefing.
 
 ${google ? "Gmail and Google Calendar are connected. FIRST gather context: check the next 3 days of calendar events and search recent email (e.g. newer_than:2d, and is:unread). THEN produce cards." : "Google is not connected, so produce cards based on the user's profile and memories, plus one card suggesting they connect Google."}
+${mcpServers ? "The user's Pocket AI notes are also connected — search recent Pocket conversations and open action items (status TODO, recent recordings) and turn noteworthy ones into cards (e.g. an overdue action item, a follow-up promised in a meeting)." : ""}
 
 Produce 3 to 6 dashboard cards. Good cards are specific and actionable:
 - A tip or prep suggestion for an upcoming calendar event
@@ -92,16 +106,28 @@ ${memories.length ? `\n## Memories\n${memories.map((m) => `- ${m}`).join("\n")}`
 
   try {
     for (let turn = 0; turn < 8; turn++) {
-      const response = await client.messages.create({
+      const requestParams: any = {
         model: "claude-opus-5",
         max_tokens: 8000,
         system,
         messages: convo,
-        tools,
+        tools: [
+          ...tools,
+          ...(mcpServers
+            ? [{ type: "mcp_toolset", mcp_server_name: "pocket" }]
+            : []),
+        ],
         output_config: {
           format: { type: "json_schema", schema: CARD_SCHEMA as any },
         },
-      });
+      };
+      if (mcpServers) {
+        requestParams.mcp_servers = mcpServers;
+        requestParams.betas = ["mcp-client-2025-11-20"];
+      }
+      const response: any = mcpServers
+        ? await client.beta.messages.create(requestParams)
+        : await client.messages.create(requestParams);
 
       if (response.stop_reason === "tool_use") {
         convo.push({ role: "assistant", content: response.content });
