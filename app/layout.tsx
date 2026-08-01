@@ -17,6 +17,21 @@ export const metadata: Metadata = {
   title: "Jarvis — Your Personal AI Agent",
   description:
     "A personal AI agent powered by Claude. Plan, write, code, and think — together.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Jarvis",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+export const viewport = {
+  themeColor: "#07090d",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
